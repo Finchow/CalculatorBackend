@@ -2,7 +2,12 @@
 {
     internal class Calculator
     {
-        public static string Calculate(string userInput)
+
+        private readonly char[] allowedChars = { '(', ')', '^', '/', '*', '+', '-', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', ' ' };
+
+        private readonly string[] operators = { "^", "/", "*", "+", "-" };
+
+        public string Calculate(string userInput)
         {
             string answer;
 
@@ -25,10 +30,8 @@
             return answer;
         }
 
-        private static bool ValidateUserInput(string userInput)
+        private bool ValidateUserInput(string userInput)
         {
-            char[] allowedChars = { '(', ')', '^', '/', '*', '+', '-', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', ' ' };
-
             // make sure equation only consists of allowedChars
             foreach (char c in userInput)
             {
@@ -38,16 +41,29 @@
             return true;
         }
 
-        private static bool ValidateEquation(List<string> equation)
+        private bool ValidateEquation(List<string> equation)
         {
+            bool isValid = false;
             // make sure brackets are closed.
             var openBrackets = equation.Count(x => x.Equals("("));
             var closeBrackets = equation.Count(x => x.Equals(")"));
 
             if (openBrackets == closeBrackets)
-                return true;
+                isValid = true;
 
-            return false;
+            // check if operators are next to each other
+            string previous = "";
+            for (int i = 0; i < equation.Count(); i++)
+            {
+                if (previous == equation[i] && operators.Any(x => x == equation[i]))
+                {
+                    isValid = false;
+                }
+                previous = equation[i];
+            }
+
+
+            return isValid;
         }
 
         private static List<string> CreateEquation(string rawEquation)
@@ -61,7 +77,7 @@
             }
 
             // remove whitespace
-            equation.RemoveAll(x => equation.Contains(" "));
+            equation.RemoveAll(x => x == " ");
 
             // recombine numbers
             string previous = " ";
@@ -87,20 +103,52 @@
             return equation;
         }
 
-        private static string CalculateEquation(List<string> equation)
+        private string CalculateEquation(List<string> equation)
         {
-            //Brackets - Check for recursive brackets
-            List<List<string>> bracketEquations = new();
+            int bracketsCount = equation.Count(x => x.Equals("("));
 
-            var totalBrackets = equation.Count(x => x.Equals("("));
-            if (totalBrackets > 0)
+            for (int i = 0; i < bracketsCount; i++)
             {
-                bracketEquations.Add(SeparateBrackets(equation));
+                int equationLength = equation.Count();
+                // brackets - check for recursive brackets
 
-                for (int i = 1; i < totalBrackets; i++)
-                    bracketEquations.Add(SeparateBrackets(bracketEquations[i - 1]));
+                // find final open bracket
+                var openBracketIndex = equation.FindLastIndex(x => x.Equals("("));
+                int closeBracketIndex = 0;
+
+                // find closest close bracket
+                for (int j = openBracketIndex; j < equationLength; j++)
+                {
+                    if (equation[j] == ")")
+                    {
+                        closeBracketIndex = j;
+                        break;
+                    }
+                }
+
+                // select range
+                var bracketEquation = equation.GetRange(openBracketIndex, closeBracketIndex - openBracketIndex);
+
+                // remove brackets
+                bracketEquation.RemoveAll(x => x.Equals("(") || x.Equals(")"));
+
+                // calculate
+                bracketEquation = PerformOperation(bracketEquation);
+
+                // add answer into equation
+                equation.Insert(openBracketIndex, bracketEquation.First());
+
+                // remove calculated bracket from equation
+                equation.RemoveRange(openBracketIndex + 1, closeBracketIndex - openBracketIndex + 1);
+
             }
 
+            equation.RemoveAll(x => x.Equals("(") || x.Equals(")"));
+
+            // find operators and related numbers and complete the calculation
+            equation = PerformOperation(equation);
+
+            // create readable answer
             string answer = "";
             foreach (string equationItem in equation)
                 answer += " " + equationItem;
@@ -108,45 +156,64 @@
             return answer;
         }
 
+        private List<string> PerformOperation(List<string> equation)
+        {
+            // detects all operators and replaces them with result of equation
+            foreach (string operation in operators)
+            {
+                for (int i = 0; i < equation.Count(); i++)
+                {
+                    if (equation[i] == operation)
+                    {
+                        equation[i] = Arithmetic(equation[i], equation[i - 1], equation[i + 1]);
+                        equation.RemoveAt(i + 1);
+                        equation.RemoveAt(i - 1);
+                    }
+                }
+            }
+
+            return equation;
+        }
+
         private static List<string> SeparateBrackets(List<string> equation)
         {
-            // Separates the first layer pair of brackets in a list
+            // separates the first layer pair of brackets in a list
             List<string> brackets = [];
             var firstBracket = equation.IndexOf("(");
             var lastBracket = equation.LastIndexOf(")");
 
-            return equation.GetRange(firstBracket + 1, (lastBracket - firstBracket - 1));
+            return equation.GetRange(firstBracket, (lastBracket - firstBracket));
         }
 
-        private static decimal Arithmetic(string operation, decimal num1, decimal num2)
+        private static string Arithmetic(string operation, string num1, string num2)
         {
+            var first = double.Parse(num1);
+            var second = double.Parse(num2);
+
+            double answer;
+
             switch (operation)
             {
                 case "+":
-                    return num1 + num2;
+                    answer = first + second;
+                    break;
                 case "-":
-                    return num1 - num2;
-                case "x":
-                    return num1 * num2;
+                    answer = first - second;
+                    break;
+                case "*":
+                    answer = first * second;
+                    break;
                 case "/":
-                    return num1 / num2;
+                    answer = first / second;
+                    break;
                 case "^":
-                    return Exponentiate(num1, num2);
+                    answer = Math.Pow(first, second);
+                    break;
                 default:
-                    return 0;
-
+                    answer = 0;
+                    break;
             }
+            return answer.ToString();
         }
-
-        private static decimal Exponentiate(decimal baseNum, decimal power)
-        {
-            for (int i = 0; i < power; i++)
-            {
-                baseNum += baseNum * baseNum;
-            }
-
-            return baseNum;
-        }
-
     }
 }
